@@ -11,14 +11,17 @@ from pathlib import Path
 from typing import Any
 
 from metricforge import MetricStore
-from metricforge.models.semantic_model import SemanticModel
+from metricforge.models.semantic_model import AggregationType, SemanticModel
 
 from metric_helpdesk.catalog import MetricCatalog
 from metric_helpdesk.models import (
+    ComparisonRequest,
+    ComparisonRow,
     DimensionFilter,
     HelpDeskError,
     MetricDetail,
     MetricList,
+    PeriodComparison,
     QueryRequest,
     QueryResult,
 )
@@ -106,6 +109,65 @@ class HelpDesk:
             sql=result.sql,
         )
 
+    def compare_periods(self, request: ComparisonRequest) -> PeriodComparison:
+        """Break a metric's change between two periods down by one dimension."""
+        periods = [
+            (request.period_a_start, request.period_a_end),
+            (request.period_b_start, request.period_b_end),
+        ]
+        totals: list[float | None] = []
+        breakdowns: list[dict[str | None, float | None]] = []
+        for start, end in periods:
+            base = QueryRequest(
+                metrics=[request.metric],
+                grain=None,
+                start_date=start,
+                end_date=end,
+                filters=request.filters,
+                limit=500,
+            )
+            total_rows = self.query_metrics(base).rows
+            totals.append(total_rows[0][request.metric] if total_rows else None)
+            by_value = self.query_metrics(base.model_copy(update={"group_by": [request.dimension]}))
+            breakdowns.append(
+                {row[request.dimension]: row[request.metric] for row in by_value.rows}
+            )
+
+        is_additive = self._is_additive(request.metric)
+        total_change = _difference(totals[1], totals[0])
+        rows = []
+        for value in set(breakdowns[0]) | set(breakdowns[1]):
+            a, b = breakdowns[0].get(value), breakdowns[1].get(value)
+            if is_additive:
+                a, b = a or 0.0, b or 0.0
+            change = _difference(b, a)
+            share = None
+            if is_additive and change is not None and total_change:
+                share = round(change / total_change, 4)
+            rows.append(
+                ComparisonRow(
+                    value=value, period_a=a, period_b=b, change=change, share_of_change=share
+                )
+            )
+        rows.sort(key=lambda row: abs(row.change or 0.0), reverse=True)
+        return PeriodComparison(
+            metric=request.metric,
+            dimension=request.dimension,
+            is_additive=is_additive,
+            total_a=totals[0],
+            total_b=totals[1],
+            total_change=total_change,
+            rows=rows[:25],
+        )
+
+    def _is_additive(self, metric_name: str) -> bool:
+        """Sums and counts split cleanly across dimension values; averages and ratios do not."""
+        metric = self.catalog.metric(metric_name)
+        if metric.type != "simple":
+            return False
+        measure = self.catalog.registry.get_measure(metric.type_params.measure)
+        return measure.agg in (AggregationType.SUM, AggregationType.COUNT)
+
     def _single_model(self, metric_names: list[str]) -> SemanticModel:
         models = {name: self.catalog.model_of(name) for name in metric_names}
         names = {model.name for model in models.values()}
@@ -121,3 +183,9 @@ class HelpDesk:
         expr = dimension.expr or dimension.name
         literals = ", ".join(sql_literal(value) for value in dimension_filter.values)
         return f"{expr} IN ({literals})"
+
+
+def _difference(new: float | None, old: float | None) -> float | None:
+    if new is None or old is None:
+        return None
+    return round(new - old, 4)

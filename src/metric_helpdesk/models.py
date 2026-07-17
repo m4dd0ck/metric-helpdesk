@@ -63,3 +63,39 @@ class QueryResult(BaseModel):
     row_count: int
     truncated: bool
     sql: str
+
+
+class ComparisonRequest(BaseModel):
+    """Compare one metric across two date ranges, broken down by a dimension."""
+
+    metric: str
+    dimension: str = Field(description="Dimension to break the change down by")
+    period_a_start: date
+    period_a_end: date
+    period_b_start: date
+    period_b_end: date
+    filters: list[DimensionFilter] = Field(default_factory=list)
+
+
+class ComparisonRow(BaseModel):
+    """One dimension value's contribution to the change."""
+
+    value: str | None
+    period_a: float | None
+    period_b: float | None
+    change: float | None
+    share_of_change: float | None = Field(
+        description="Fraction of the total change; only for additive metrics (sums and counts)"
+    )
+
+
+class PeriodComparison(BaseModel):
+    """How a metric moved between two periods and which dimension values drove it."""
+
+    metric: str
+    dimension: str
+    is_additive: bool
+    total_a: float | None
+    total_b: float | None
+    total_change: float | None
+    rows: list[ComparisonRow] = Field(description="Largest absolute changes first, at most 25")
