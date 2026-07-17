@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from metric_helpdesk.models import DimensionFilter, HelpDeskError, QueryRequest
+from metric_helpdesk.models import ComparisonRequest, DimensionFilter, HelpDeskError, QueryRequest
 from metric_helpdesk.tools import HelpDesk
 from metric_helpdesk.warehouse import WarehouseError, open_store
 
@@ -86,3 +86,31 @@ class TestWarehouse:
     def test_missing_file_raises(self, warehouse: tuple[Path, Path], tmp_path: Path) -> None:
         with pytest.raises(WarehouseError, match="not found"):
             open_store(warehouse[0], tmp_path / "missing.duckdb")
+
+
+class TestComparePeriods:
+    def request(self, metric: str) -> ComparisonRequest:
+        return ComparisonRequest(
+            metric=metric,
+            dimension="country",
+            period_a_start=date(2024, 1, 1),
+            period_a_end=date(2024, 1, 31),
+            period_b_start=date(2024, 2, 1),
+            period_b_end=date(2024, 2, 29),
+        )
+
+    def test_additive_change_is_split_by_dimension(self, helpdesk: HelpDesk) -> None:
+        result = helpdesk.compare_periods(self.request("revenue"))
+        assert result.is_additive
+        assert result.total_change == -60.0  # 29 days vs 31 days, three countries
+        assert {row.value: row.change for row in result.rows} == {
+            "US": -20.0,
+            "GB": -20.0,
+            "Côte d'Ivoire": -20.0,
+        }
+        assert sum(row.share_of_change or 0 for row in result.rows) == pytest.approx(1.0, abs=1e-3)
+
+    def test_averages_get_no_share_of_change(self, helpdesk: HelpDesk) -> None:
+        result = helpdesk.compare_periods(self.request("average_order_value"))
+        assert not result.is_additive
+        assert all(row.share_of_change is None for row in result.rows)
