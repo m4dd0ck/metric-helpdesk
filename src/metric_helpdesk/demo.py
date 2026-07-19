@@ -7,7 +7,9 @@ revenue drops. It gives "why did revenue dip in July?" a real answer to find.
 
 import csv
 import random
+import shutil
 import tempfile
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -128,6 +130,26 @@ def build_warehouse(db_path: Path, seed: int = DEMO_SEED) -> dict[str, int]:
         )
         _bulk_insert(connection, "sessions", sessions)
     return {"orders": len(orders), "sessions": len(sessions)}
+
+
+@dataclass(frozen=True)
+class DemoPaths:
+    """Where the demo definitions and warehouse were written."""
+
+    metrics_dir: Path
+    db_path: Path
+
+
+DEMO_METRICS = Path(__file__).parent / "demo_metrics"
+
+
+def build_demo(out_dir: Path) -> DemoPaths:
+    """Write the demo warehouse and a copy of its metric definitions under ``out_dir``."""
+    paths = DemoPaths(metrics_dir=out_dir / "metrics", db_path=out_dir / "shop.duckdb")
+    shutil.rmtree(paths.metrics_dir, ignore_errors=True)
+    shutil.copytree(DEMO_METRICS, paths.metrics_dir)
+    build_warehouse(paths.db_path)
+    return paths
 
 
 def _bulk_insert(

@@ -1,0 +1,86 @@
+# Demo metric definitions for the seeded e-commerce warehouse.
+# MetricForge derived metrics substitute metric names by text replacement, so no metric name
+# appears inside a column name or another metric's name.
+
+semantic_models:
+  - name: orders
+    description: "One row per order"
+    table: orders
+    primary_entity: order_id
+    entities:
+      - {name: order_id, type: primary}
+      - {name: customer_id, type: foreign}
+    measures:
+      - {name: order_amount, agg: sum, expr: amount, description: "Order value in USD"}
+      - {name: order_count, agg: count, expr: order_id}
+      - {name: unique_customers, agg: count_distinct, expr: customer_id}
+      - {name: units, agg: sum, expr: quantity}
+    dimensions:
+      - {name: order_date, type: time, time_granularity: day}
+      - {name: order_status, type: categorical, expr: status}
+      - {name: country, type: categorical}
+      - {name: product_category, type: categorical, expr: category}
+      - {name: payment_method, type: categorical}
+
+  - name: sessions
+    description: "One row per website session"
+    table: sessions
+    primary_entity: session_id
+    entities:
+      - {name: session_id, type: primary}
+    measures:
+      - {name: session_count, agg: count, expr: session_id}
+      - {name: unique_visitors, agg: count_distinct, expr: visitor_id}
+      - {name: page_view_sum, agg: sum, expr: page_views}
+    dimensions:
+      - {name: session_date, type: time, time_granularity: day}
+      - {name: visitor_country, type: categorical, expr: country}
+      - {name: device, type: categorical}
+
+metrics:
+  - name: revenue
+    description: "Value of completed orders"
+    type: simple
+    type_params: {measure: order_amount}
+    filter: "status = 'completed'"
+  - name: completed_orders
+    type: simple
+    type_params: {measure: order_count}
+    filter: "status = 'completed'"
+  - name: cancelled_orders
+    type: simple
+    type_params: {measure: order_count}
+    filter: "status = 'cancelled'"
+  - name: total_orders
+    description: "All orders regardless of status"
+    type: simple
+    type_params: {measure: order_count}
+  - name: buying_customers
+    description: "Distinct customers with a completed order"
+    type: simple
+    type_params: {measure: unique_customers}
+    filter: "status = 'completed'"
+  - name: units_sold
+    type: simple
+    type_params: {measure: units}
+    filter: "status = 'completed'"
+  - name: average_order_value
+    description: "Revenue per completed order"
+    type: derived
+    type_params: {expr: "revenue / completed_orders", metrics: [revenue, completed_orders]}
+  - name: cancellation_rate
+    description: "Share of orders cancelled"
+    type: ratio
+    type_params: {numerator: cancelled_orders, denominator: total_orders}
+  - name: total_sessions
+    type: simple
+    type_params: {measure: session_count}
+  - name: visitors
+    type: simple
+    type_params: {measure: unique_visitors}
+  - name: total_page_views
+    type: simple
+    type_params: {measure: page_view_sum}
+  - name: pages_per_session
+    type: derived
+    type_params: {expr: "total_page_views / total_sessions", metrics: [total_page_views, total_sessions]}
