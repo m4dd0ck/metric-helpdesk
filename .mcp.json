@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "metric-helpdesk": {
+      "command": "uv",
+      "args": ["run", "--quiet", "metric-helpdesk", "serve"]
+    }
+  }
+}
