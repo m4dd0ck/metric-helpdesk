@@ -9,6 +9,12 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from metric_helpdesk.ask.loop import DEFAULT_MODEL, AskResult, MessagesClient, run_question
+from metric_helpdesk.ask.transcript import (
+    RecordingClient,
+    ReplayClient,
+    Transcript,
+    TranscriptError,
+)
 from metric_helpdesk.demo import build_demo
 from metric_helpdesk.server import build_server
 from metric_helpdesk.tools import HelpDesk
@@ -83,12 +89,37 @@ def print_answer(result: AskResult) -> None:
 
 @app.command()
 def ask(
-    question: Annotated[str, typer.Argument(help="Question about your metrics.")],
+    question: Annotated[
+        str | None, typer.Argument(help="Question; optional with --replay.")
+    ] = None,
     metrics: MetricsOption = DEMO_DIR / "metrics",
     db: DbOption = DEMO_DIR / "shop.duckdb",
     model: Annotated[str, typer.Option(help="Claude model ID.")] = DEFAULT_MODEL,
+    record: Annotated[Path | None, typer.Option(help="Save the session to this file.")] = None,
+    replay: Annotated[Path | None, typer.Option(help="Replay a saved session.")] = None,
 ) -> None:
-    """Answer a question with the Claude API (needs API credentials)."""
-    messages_client = api_messages_client()
+    """Answer a question with the Claude API (needs API credentials), or replay a saved one."""
+    messages_client: MessagesClient
+    if replay:
+        try:
+            replay_client = ReplayClient(Transcript.load(replay))
+            question = question or replay_client.transcript.question
+            replay_client.check_question(question)
+        except TranscriptError as error:
+            raise typer.BadParameter(str(error)) from error
+        model = replay_client.transcript.model
+        console.print(f"[dim]Replaying {replay} ({replay_client.transcript.source})[/]")
+        messages_client = replay_client
+    elif question is None:
+        raise typer.BadParameter("Ask a question, or pass --replay.")
+    else:
+        messages_client = api_messages_client()
+        if record:
+            messages_client = RecordingClient(messages_client, question, model)
+
     server = build_server(HelpDesk.open(metrics, db))
+    console.print(f"[bold]Q:[/] {question}")
     print_answer(asyncio.run(run_question(messages_client, server, question, model)))
+    if record and isinstance(messages_client, RecordingClient):
+        messages_client.transcript.save(record)
+        console.print(f"[dim]Saved session to {record}[/]")
