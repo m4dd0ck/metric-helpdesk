@@ -48,11 +48,13 @@ class QueryRequest(BaseModel):
 
     metrics: list[str] = Field(min_length=1, max_length=8, description="Metric names")
     group_by: list[str] = Field(default_factory=list, description="Dimension names")
-    grain: TimeGrain | None = Field("month", description="Time grain; null for no time split")
+    grain: TimeGrain | None = Field(
+        default="month", description="Time grain; null for no time split"
+    )
     start_date: date | None = None
     end_date: date | None = None
     filters: list[DimensionFilter] = Field(default_factory=list)
-    limit: int = Field(200, ge=1, le=500)
+    limit: int = Field(default=200, ge=1, le=500)
 
 
 class QueryResult(BaseModel):
