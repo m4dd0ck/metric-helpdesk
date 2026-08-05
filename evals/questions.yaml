@@ -1,0 +1,50 @@
+# Eval questions for the demo warehouse. Expected numbers are not written here; the grader
+# computes them from the warehouse through the same tools, so the file stays correct if the
+# demo data changes.
+#
+#   must_call      tools that must appear in the call log
+#   must_mention   case-insensitive regexes that must all match the answer
+#   values         numbers the answer must contain (any common formatting accepted)
+#   must_not       regexes that must not match (e.g. leaked SQL)
+
+- id: july_dip
+  question: Why did revenue dip in July 2024?
+  must_call: [compare_periods]
+  must_mention: ["germany|\\bDE\\b", "card"]
+  values:
+    - {metric: revenue, start: 2024-07-01, end: 2024-07-31}
+  must_not: ["\\bSELECT\\b"]
+
+- id: june_revenue
+  question: What was revenue in June 2024?
+  must_call: [query_metrics]
+  values:
+    - {metric: revenue, start: 2024-06-01, end: 2024-06-30}
+
+- id: aov_definition
+  question: How is average order value calculated?
+  must_call: [describe_metric]
+  must_mention: ["revenue", "completed"]
+
+- id: top_category
+  question: Which product category brought in the most revenue in 2024?
+  must_call: [query_metrics]
+  values:
+    - {metric: revenue, start: 2024-01-01, end: 2024-12-31, top_of: product_category}
+
+- id: q4_cancellations
+  question: What was the order cancellation rate in Q4 2024?
+  must_call: [query_metrics]
+  values:
+    - {metric: cancellation_rate, start: 2024-10-01, end: 2024-12-31}
+
+- id: cross_table
+  question: How many website sessions and how much revenue did we have in March 2024?
+  must_call: [query_metrics]
+  values:
+    - {metric: total_sessions, start: 2024-03-01, end: 2024-03-31}
+    - {metric: revenue, start: 2024-03-01, end: 2024-03-31}
+
+- id: unanswerable
+  question: What was our customer acquisition cost in 2024?
+  must_mention: ["not (available|tracked|defined)|no (metric|data)|(don't|do not|doesn't|does not|can't|cannot) (have|track|include|answer|calculate|compute)"]
