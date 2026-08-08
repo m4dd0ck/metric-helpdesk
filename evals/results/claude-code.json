@@ -1,0 +1,191 @@
+{
+  "runner": "claude-code",
+  "model": "claude-code default",
+  "passed": 7,
+  "total": 7,
+  "results": [
+    {
+      "id": "july_dip",
+      "question": "Why did revenue dip in July 2024?",
+      "passed": true,
+      "tools_called": [
+        "list_metrics",
+        "query_metrics",
+        "query_metrics",
+        "compare_periods",
+        "compare_periods",
+        "compare_periods",
+        "compare_periods",
+        "compare_periods",
+        "compare_periods",
+        "query_metrics"
+      ],
+      "checks": [
+        {
+          "name": "called compare_periods",
+          "passed": true,
+          "detail": "list_metrics, query_metrics, query_metrics, compare_periods, compare_periods, compare_periods, compare_periods, compare_periods, compare_periods, query_metrics"
+        },
+        {
+          "name": "mentions /germany|\\bDE\\b/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "mentions /card/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "states revenue",
+          "passed": true,
+          "detail": "expected one of ['85,113', '85113', '85,112.83']"
+        },
+        {
+          "name": "avoids /\\bSELECT\\b/",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "answer": "Revenue fell because a lot of card orders in Germany were cancelled. Demand didn't drop.\n\n**What happened (metrics: `revenue`, `total_orders`, `cancelled_orders`, `cancellation_rate`; June 2024 compared with July 2024)**\n\n- **Revenue** fell from $92,378 to $85,113 (\u2212$7,265, \u22127.9%). August recovered to $94,110.\n- **Demand was flat.** Total orders were 1,242 in June and 1,245 in July. Sessions and visitors were also flat. Average order value actually went up ($80.61 \u2192 $84.10).\n- **Cancellations went from 59 to 195.** The cancellation rate rose from 4.8% to 15.7%, which cut completed orders from 1,146 to 1,012.\n\n**Where it was concentrated**\n\n| Cut | Share of the rise in cancellations |\n|---|---|\n| Country = DE | 96% (7 \u2192 137) |\n| Payment = card | 90% (48 \u2192 171) |\n| DE and card together | 129 of the 136 extra cancellations |\n\n- Revenue in Germany fell by $8,177, from $18,530 to $10,353. That is more than the whole net drop. All other countries were roughly flat or up.\n- The rise was spread across all product categories, so it wasn't about a particular product.\n\n**Timing (weekly counts for DE card orders)**\n\n| Week of | Cancelled / total orders |\n|---|---|\n| Jun 24 | 3 / 49 |\n| Jul 1 | 27 / 44 |\n| Jul 8 | 26 / 43 |\n| Jul 15 | 37 / 49 |\n| Jul 22 | 29 / 43 |\n| Jul 29 | 17 / 47 |\n| Aug 5 | 6 / 51 |\n\nCancellations started abruptly at the beginning of July, stayed high all month, and went back to normal in early August.\n\n**What the data can't tell you:** why those orders were cancelled. There's no cancellation-reason field and no payment-provider data. The pattern fits a card-payment problem specific to Germany, such as a payment processor or 3-D Secure/SCA outage, or a fraud rule misfiring. To confirm it, check the payment gateway logs and any incident or deploy records from July 1 to early August 2024."
+    },
+    {
+      "id": "june_revenue",
+      "question": "What was revenue in June 2024?",
+      "passed": true,
+      "tools_called": [
+        "list_metrics",
+        "query_metrics"
+      ],
+      "checks": [
+        {
+          "name": "called query_metrics",
+          "passed": true,
+          "detail": "list_metrics, query_metrics"
+        },
+        {
+          "name": "states revenue",
+          "passed": true,
+          "detail": "expected one of ['92,378', '92378', '92,377.90']"
+        }
+      ],
+      "answer": "Revenue in June 2024 was **92,377.90**.\n\nThat number comes from the `revenue` metric, which adds up the `amount` of **completed** orders only. It covers order dates from 2024-06-01 through 2024-06-30 and leaves out cancelled orders and orders with any other status. The data doesn't store a currency."
+    },
+    {
+      "id": "aov_definition",
+      "question": "How is average order value calculated?",
+      "passed": true,
+      "tools_called": [
+        "list_metrics",
+        "describe_metric"
+      ],
+      "checks": [
+        {
+          "name": "called describe_metric",
+          "passed": true,
+          "detail": "list_metrics, describe_metric"
+        },
+        {
+          "name": "mentions /revenue/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "mentions /completed/",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "answer": "**Average order value = revenue \u00f7 completed orders.** It's a derived metric in the `orders` semantic model, built from two other metrics:\n\n- **`revenue`**: the sum of `amount` for orders with `status = 'completed'`.\n- **`completed_orders`**: the count of `order_id` for orders with `status = 'completed'`.\n\nThe monthly query it runs:\n\n```sql\nSELECT\n  DATE_TRUNC('MONTH', order_date) AS order_date,\n  SUM(CASE WHEN status = 'completed' THEN amount END)\n    / COUNT(CASE WHEN status = 'completed' THEN order_id END) AS average_order_value\nFROM orders\nGROUP BY DATE_TRUNC('MONTH', order_date)\nORDER BY DATE_TRUNC('MONTH', order_date)\n```\n\n- **Only completed orders count.** Cancelled and other non-completed orders are left out of both the top and bottom of the division.\n- **Orders are dated by `order_date`**, so each order lands in the month it was placed, not the month it was completed.\n- **It uses `COUNT`, not `COUNT(DISTINCT)`.** If the `orders` table ever has more than one row per order (for example, one row per product category), those orders would be counted more than once and the average would come out too low. The definition doesn't say how many rows each order has, so I can't tell whether this happens.\n- **You can break it down** by `order_status`, `country`, `product_category` and `payment_method`.\n\nThis comes from the metric definition (`average_order_value`, plus `revenue` and `completed_orders`). I didn't query any actual values."
+    },
+    {
+      "id": "top_category",
+      "question": "Which product category brought in the most revenue in 2024?",
+      "passed": true,
+      "tools_called": [
+        "list_metrics",
+        "query_metrics"
+      ],
+      "checks": [
+        {
+          "name": "called query_metrics",
+          "passed": true,
+          "detail": "list_metrics, query_metrics"
+        },
+        {
+          "name": "states revenue",
+          "passed": true,
+          "detail": "expected one of ['apparel']"
+        }
+      ],
+      "answer": "**Apparel** brought in the most revenue in 2024, with **$393,584**.\n\n| Product category | 2024 revenue |\n|---|---|\n| Apparel | $393,583.92 |\n| Home | $280,806.50 |\n| Electronics | $239,877.49 |\n| Beauty | $225,650.86 |\n\nApparel made about $113K more than Home, the second-highest category. This uses the `revenue` metric, which counts only completed orders, for January 1 to December 31, 2024."
+    },
+    {
+      "id": "q4_cancellations",
+      "question": "What was the order cancellation rate in Q4 2024?",
+      "passed": true,
+      "tools_called": [
+        "list_metrics",
+        "query_metrics",
+        "query_metrics"
+      ],
+      "checks": [
+        {
+          "name": "called query_metrics",
+          "passed": true,
+          "detail": "list_metrics, query_metrics, query_metrics"
+        },
+        {
+          "name": "states cancellation_rate",
+          "passed": true,
+          "detail": "expected one of ['5.3%', '5.33%', '5%']"
+        }
+      ],
+      "answer": "The order cancellation rate in Q4 2024 was **5.33%**. That's 227 cancelled orders out of 4,260 total orders placed between Oct 1 and Dec 31, 2024.\n\nIt fell each month of the quarter:\n\n| Month | Cancelled | Total orders | Rate |\n|---|---|---|---|\n| Oct 2024 | 78 | 1,291 | 6.04% |\n| Nov 2024 | 72 | 1,416 | 5.08% |\n| Dec 2024 | 77 | 1,553 | 4.96% |\n\nThe number of cancellations stayed about the same each month, but total orders grew, so the rate went down.\n\nI used the `cancellation_rate` metric, which divides cancelled orders by all orders of any status and groups them by `order_date`."
+    },
+    {
+      "id": "cross_table",
+      "question": "How many website sessions and how much revenue did we have in March 2024?",
+      "passed": true,
+      "tools_called": [
+        "list_metrics",
+        "query_metrics",
+        "query_metrics"
+      ],
+      "checks": [
+        {
+          "name": "called query_metrics",
+          "passed": true,
+          "detail": "list_metrics, query_metrics, query_metrics"
+        },
+        {
+          "name": "states total_sessions",
+          "passed": true,
+          "detail": "expected one of ['7,326', '7326', '7,326.00']"
+        },
+        {
+          "name": "states revenue",
+          "passed": true,
+          "detail": "expected one of ['95,075', '95075', '95,075.15']"
+        }
+      ],
+      "answer": "In March 2024 we had **7,326 website sessions** and **95,075.15 in revenue**.\n\n- **Sessions (`total_sessions`):** the number of sessions in the `sessions` table with a `session_date` from 1\u201331 March 2024.\n- **Revenue (`revenue`):** the sum of `amount` for **completed** orders only in the `orders` table, by `order_date`, 1\u201331 March 2024. Cancelled and other non-completed orders are left out. The data doesn't say what currency this is.\n\nThe two numbers come from separate tables, so they can't be linked. The data can't tell you how much revenue came from any particular session."
+    },
+    {
+      "id": "unanswerable",
+      "question": "What was our customer acquisition cost in 2024?",
+      "passed": true,
+      "tools_called": [
+        "list_metrics"
+      ],
+      "checks": [
+        {
+          "name": "mentions /can(no|')t (tell|answer|calculate|compute|be)|no (spend|cost|marketing|metric|data)|not (available|tracked|defined|possible)|(don't|do not|doesn't|does not) (have|track|include|cover)/",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "answer": "I can't answer this from the metric helpdesk. None of its metrics measure customer acquisition cost.\n\nTo calculate CAC you need two numbers: what you spent on sales and marketing, and how many new customers you gained. Neither is available here:\n\n- **Spend:** there's no cost or spend data. The only sources are the `orders` table (revenue, orders, units, cancellations) and the `sessions` table (sessions, visitors, page views).\n- **New customers:** `buying_customers` counts distinct customers who completed an order in a period. It doesn't separate first-time buyers from repeat buyers, so it isn't a count of new customers.\n\nIf you get the 2024 marketing spend from finance or your ad platforms, I can pull `buying_customers` for 2024 to use as a rough denominator. It would overstate the new-customer count, so the CAC would come out lower than the real figure."
+    }
+  ]
+}

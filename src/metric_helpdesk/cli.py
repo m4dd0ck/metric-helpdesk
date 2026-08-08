@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -196,7 +195,6 @@ def run_eval(
         summary = {
             "runner": runner,
             "model": model or ("claude-code default" if runner == "claude-code" else DEFAULT_MODEL),
-            "run_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "passed": passed_count,
             "total": len(records),
             "results": records,
