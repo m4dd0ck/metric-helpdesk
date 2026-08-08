@@ -1,12 +1,15 @@
 """``metric-helpdesk`` command line interface."""
 
 import asyncio
+import json
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import typer
 from rich.console import Console
 from rich.markdown import Markdown
+from rich.table import Table
 
 from metric_helpdesk.ask.loop import DEFAULT_MODEL, AskResult, MessagesClient, run_question
 from metric_helpdesk.ask.transcript import (
@@ -16,6 +19,13 @@ from metric_helpdesk.ask.transcript import (
     TranscriptError,
 )
 from metric_helpdesk.demo import build_demo
+from metric_helpdesk.evals import (
+    EvalRunError,
+    RunOutput,
+    grade,
+    load_questions,
+    run_claude_code,
+)
 from metric_helpdesk.server import build_server
 from metric_helpdesk.tools import HelpDesk
 
@@ -123,3 +133,73 @@ def ask(
     if record and isinstance(messages_client, RecordingClient):
         messages_client.transcript.save(record)
         console.print(f"[dim]Saved session to {record}[/]")
+
+
+PROJECT_ROOT = Path.cwd()
+
+
+@app.command(name="eval")
+def run_eval(
+    runner: Annotated[
+        Literal["claude-code", "api"], typer.Option(help="claude-code uses your subscription.")
+    ] = "claude-code",
+    questions: Annotated[Path, typer.Option(help="Questions file.")] = Path("evals/questions.yaml"),
+    only: Annotated[str | None, typer.Option(help="Run one question id.")] = None,
+    model: Annotated[str | None, typer.Option(help="Model override.")] = None,
+    metrics: MetricsOption = DEMO_DIR / "metrics",
+    db: DbOption = DEMO_DIR / "shop.duckdb",
+    out: Annotated[Path | None, typer.Option(help="Write results JSON here.")] = None,
+) -> None:
+    """Ask every eval question and grade the answers on facts."""
+    helpdesk = HelpDesk.open(metrics, db)
+    selected = [q for q in load_questions(questions) if only is None or q.id == only]
+    messages_client = api_messages_client() if runner == "api" else None
+
+    table = Table(title=f"Evals ({runner})")
+    for column in ("Question", "Result", "Failed checks"):
+        table.add_column(column)
+    records = []
+    for question in selected:
+        console.print(f"[dim]asking[/] {question.id}")
+        try:
+            if messages_client is not None:
+                server = build_server(helpdesk)
+                ask_result = asyncio.run(
+                    run_question(messages_client, server, question.question, model or DEFAULT_MODEL)
+                )
+                output = RunOutput(ask_result.answer, [c.name for c in ask_result.tool_calls])
+            else:
+                output = run_claude_code(question.question, PROJECT_ROOT, model)
+        except EvalRunError as error:
+            output = RunOutput(answer=f"RUN ERROR: {error}", tools_called=[])
+        checks = grade(helpdesk, question, output.answer, output.tools_called)
+        passed = all(check.passed for check in checks)
+        failed = "; ".join(
+            f"{c.name} ({c.detail})" if c.detail else c.name for c in checks if not c.passed
+        )
+        table.add_row(question.id, "[green]pass[/]" if passed else "[red]fail[/]", failed)
+        records.append(
+            {
+                "id": question.id,
+                "question": question.question,
+                "passed": passed,
+                "tools_called": output.tools_called,
+                "checks": [vars(check) for check in checks],
+                "answer": output.answer,
+            }
+        )
+    Console().print(table)
+    passed_count = sum(1 for record in records if record["passed"])
+    console.print(f"{passed_count}/{len(records)} passed")
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        summary = {
+            "runner": runner,
+            "model": model or ("claude-code default" if runner == "claude-code" else DEFAULT_MODEL),
+            "run_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "passed": passed_count,
+            "total": len(records),
+            "results": records,
+        }
+        out.write_text(json.dumps(summary, indent=2) + "\n")
+        console.print(f"[dim]Wrote {out}[/]")
