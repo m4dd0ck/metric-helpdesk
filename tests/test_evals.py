@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from pathlib import Path
 
@@ -35,3 +36,26 @@ def test_grade_flags_wrong_number_missing_call_and_leaked_sql(helpdesk: HelpDesk
     )  # fmt: skip
     checks = grade(helpdesk, question, "SELECT sum(amount) gives 931.", [])
     assert [check.passed for check in checks] == [False, False, False]
+
+
+def test_top_value_names_match_regardless_of_case(helpdesk: HelpDesk) -> None:
+    spec = ValueSpec(
+        metric="revenue", start=date(2024, 1, 1), end=date(2024, 1, 31), top_of="order_status"
+    )
+    question = EvalQuestion(id="q", question="?", values=[spec])
+    assert grade(helpdesk, question, "Completed orders led.", [])[0].passed
+
+
+def test_unanswerable_pattern_accepts_plain_refusals() -> None:
+    unanswerable = next(
+        q
+        for q in load_questions(PROJECT_ROOT / "evals" / "questions.yaml")
+        if q.id == "unanswerable"
+    )
+    pattern = unanswerable.must_mention[0]
+    for answer in [
+        "The metric helpdesk can't tell you this.",
+        "There is no spend data in the metric layer.",
+        "Acquisition cost is not tracked here.",
+    ]:
+        assert re.search(pattern, answer, re.IGNORECASE), answer

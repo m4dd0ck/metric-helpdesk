@@ -86,7 +86,16 @@ def grade(
     ]
     for spec in question.values:
         variants = expected_text(helpdesk, spec)
-        found = any(variant in answer for variant in variants)
+        # Numbers must match exactly; names (top_of) are matched regardless of case.
+        haystack, needles = (
+            (answer.lower(), [v.lower() for v in variants])
+            if spec.top_of
+            else (
+                answer,
+                variants,
+            )
+        )
+        found = any(needle in haystack for needle in needles)
         checks.append(Check(f"states {spec.metric}", found, f"expected one of {variants[:3]}"))
     checks += [
         Check(f"avoids /{pattern}/", not re.search(pattern, answer, re.IGNORECASE), "")

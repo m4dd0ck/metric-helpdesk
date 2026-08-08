@@ -47,4 +47,5 @@
 
 - id: unanswerable
   question: What was our customer acquisition cost in 2024?
-  must_mention: ["not (available|tracked|defined)|no (metric|data)|(don't|do not|doesn't|does not|can't|cannot) (have|track|include|answer|calculate|compute)"]
+  # Any plain statement that the data cannot answer it.
+  must_mention: ["can(no|')t (tell|answer|calculate|compute|be)|no (spend|cost|marketing|metric|data)|not (available|tracked|defined|possible)|(don't|do not|doesn't|does not) (have|track|include|cover)"]
