@@ -93,3 +93,56 @@ def grade(
         for pattern in question.must_not
     ]
     return checks
+
+
+@dataclass
+class RunOutput:
+    answer: str
+    tools_called: list[str]
+
+
+class EvalRunError(RuntimeError):
+    """Raised when a runner cannot produce an answer."""
+
+
+def run_claude_code(question: str, project_root: Path, model: str | None = None) -> RunOutput:
+    """Ask headless Claude Code, connected only to this project's MCP server.
+
+    Uses the caller's Claude Code login, so it runs on their subscription. Tool calls are read
+    from the server's call log because Claude Code's JSON output does not include them.
+    """
+    import json
+    import os
+    import subprocess
+    import tempfile
+
+    from metric_helpdesk.server import CALL_LOG_ENV
+
+    with tempfile.TemporaryDirectory() as tmp:
+        call_log = Path(tmp) / "calls.jsonl"
+        command = [
+            "claude", "-p", question, "--output-format", "json",
+            "--mcp-config", ".mcp.json", "--strict-mcp-config",
+            "--allowedTools", "mcp__metric-helpdesk",
+        ]  # fmt: skip
+        if model:
+            command += ["--model", model]
+        completed = subprocess.run(
+            command,
+            cwd=project_root,
+            env={**os.environ, CALL_LOG_ENV: str(call_log)},
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=600,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise EvalRunError(f"claude exited {completed.returncode}: {completed.stderr[-500:]}")
+        result = json.loads(completed.stdout)
+        if result.get("is_error"):
+            raise EvalRunError(f"claude reported an error: {result.get('result')}")
+        calls = []
+        if call_log.exists():
+            calls = [json.loads(line)["tool"] for line in call_log.read_text().splitlines()]
+        return RunOutput(answer=str(result.get("result", "")), tools_called=calls)
