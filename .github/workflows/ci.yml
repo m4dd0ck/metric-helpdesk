@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy src/
+
+      # Unit, MCP protocol and replay tests. No Claude API or Claude Code calls.
+      - name: Tests
+        run: uv run pytest
+
+      - name: Demo and offline replay
+        run: |
+          uv run metric-helpdesk demo
+          uv run metric-helpdesk ask --replay transcripts/july-dip.json
