@@ -1,6 +1,6 @@
 [project]
 name = "metric-helpdesk"
-version = "0.1.0"
+version = "1.0.0"
 description = "Ask questions about your metrics in plain English, answered only through a MetricForge semantic layer."
 readme = "README.md"
 requires-python = ">=3.12"
