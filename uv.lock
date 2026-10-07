@@ -696,7 +696,7 @@ requires-dist = [
     { name = "anthropic", specifier = ">=1.9" },
     { name = "duckdb", specifier = ">=1.4" },
     { name = "mcp", specifier = ">=2.2" },
-    { name = "metricforge", git = "https://github.com/m4dd0ck/metricforge?rev=v0.1.0" },
+    { name = "metricforge", git = "https://github.com/m4dd0ck/metricforge?rev=v0.2.0" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "rich", specifier = ">=13" },
@@ -713,8 +713,8 @@ dev = [
 
 [[package]]
 name = "metricforge"
-version = "0.1.0"
-source = { git = "https://github.com/m4dd0ck/metricforge?rev=v0.1.0#27a953ef60b1fc14fc0e166b95e7484811c9c1ec" }
+version = "0.2.0"
+source = { git = "https://github.com/m4dd0ck/metricforge?rev=v0.2.0#9a89e5aa4bdbf84c4b51f3bb6d55f91c9c984b3d" }
 dependencies = [
     { name = "duckdb" },
     { name = "pydantic" },
