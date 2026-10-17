@@ -73,31 +73,27 @@ class HelpDesk:
 
     def query_metrics(self, request: QueryRequest) -> QueryResult:
         """Compute metrics, optionally by time grain and dimensions, within a date range."""
-        model = self._single_model(request.metrics)
-        time_dimension = self.catalog.time_dimension(model)
+        models = self.catalog.models_of(request.metrics)
+        time_dimension = self.catalog.time_dimension(models)
         if (request.grain or request.start_date or request.end_date) and time_dimension is None:
-            raise HelpDeskError(f"{model.name} has no time dimension; drop grain and dates.")
+            names = " and ".join(model.name for model in models)
+            raise HelpDeskError(f"No time dimension on {names}; drop grain and dates.")
         if request.start_date and request.end_date and request.start_date > request.end_date:
             raise HelpDeskError("start_date must be on or before end_date.")
 
-        group_by = [self.catalog.dimension(model, name).name for name in request.group_by]
+        group_by = [self.catalog.dimension(models, name).name for name in request.group_by]
         dimensions = group_by
         if request.grain and time_dimension:
             dimensions = [time_dimension.name, *group_by]
 
-        conditions = [self._filter_condition(model, f) for f in request.filters]
-        if time_dimension:
-            time_expr = time_dimension.expr or time_dimension.name
-            if request.start_date:
-                conditions.append(f"{time_expr} >= DATE '{request.start_date.isoformat()}'")
-            if request.end_date:
-                conditions.append(f"{time_expr} <= DATE '{request.end_date.isoformat()}'")
-
+        # Reason: MetricForge applies the inclusive date range to each table's own time column
         result = self.store.query(
             metrics=request.metrics,
             dimensions=dimensions,
-            filters=conditions,
+            filters=[self._filter_condition(models, f) for f in request.filters],
             time_grain=request.grain,
+            start_date=request.start_date,
+            end_date=request.end_date,
             limit=request.limit + 1,  # one extra row tells us whether the result was cut off
         )
         rows = [{k: to_json_value(v) for k, v in row.items()} for row in result.data]
@@ -168,18 +164,10 @@ class HelpDesk:
         measure = self.catalog.registry.get_measure(metric.type_params.measure)
         return measure.agg in (AggregationType.SUM, AggregationType.COUNT)
 
-    def _single_model(self, metric_names: list[str]) -> SemanticModel:
-        models = {name: self.catalog.model_of(name) for name in metric_names}
-        names = {model.name for model in models.values()}
-        if len(names) > 1:
-            by_model = ", ".join(f"{m} ({models[m].name})" for m in metric_names)
-            raise HelpDeskError(
-                f"Metrics come from different tables: {by_model}. Query each table separately."
-            )
-        return next(iter(models.values()))
-
-    def _filter_condition(self, model: SemanticModel, dimension_filter: DimensionFilter) -> str:
-        dimension = self.catalog.dimension(model, dimension_filter.dimension)
+    def _filter_condition(
+        self, models: list[SemanticModel], dimension_filter: DimensionFilter
+    ) -> str:
+        dimension = self.catalog.dimension(models, dimension_filter.dimension)
         expr = dimension.expr or dimension.name
         literals = ", ".join(sql_literal(value) for value in dimension_filter.values)
         return f"{expr} IN ({literals})"

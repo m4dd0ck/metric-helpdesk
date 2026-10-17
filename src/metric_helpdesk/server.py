@@ -69,9 +69,9 @@ def build_server(helpdesk: HelpDesk) -> MCPServer:
 
     @server.tool(
         description=(
-            "Compute metrics from one table, optionally by time grain (default month) and "
-            "dimensions, within an inclusive date range. Filters keep rows whose dimension "
-            "equals one of the given values."
+            "Compute metrics, optionally by time grain (default month) and dimensions, within "
+            "an inclusive date range. Metrics from different tables are joined on the "
+            "dimensions they share. Filters keep rows whose dimension equals one of the values."
         )
     )
     def query_metrics(

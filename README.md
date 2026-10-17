@@ -72,8 +72,9 @@ because their parts do not add up to the whole.
   did-you-mean suggestions), filter values become escaped literals, and dates arrive as parsed
   dates. The SQL itself comes from MetricForge.
 - **Read-only warehouse.** The DuckDB file is attached `READ_ONLY` into an in-memory database.
-- **Only metrics MetricForge can answer.** Cumulative metrics and metrics spanning tables are
-  left out of the catalog. A request mixing tables is refused with a hint to query separately.
+- **Only questions MetricForge can answer.** Metrics from different tables are joined on the
+  dimensions every table declares, so `list_metrics` offers only those for a cross-table
+  metric, and a `group_by` or filter outside them is refused with the valid names.
 - **Bounded results.** At most 500 rows per query, with a `truncated` flag.
 - **Errors the model can act on.** Bad names and arguments come back as tool errors with the fix
   in the message, so Claude corrects itself instead of guessing.
@@ -112,8 +113,8 @@ answers included).
 
 ## Limits
 
-- MetricForge compiles single-table queries, so one call cannot combine metrics from different
-  tables. Claude handles this by making two calls (see the `cross_table` eval).
+- Metrics from different tables join on dimensions that share a name. The demo's sessions call
+  their country `visitor_country`, so sessions and revenue compare by month but not by country.
 - The data explains *where* and *when* a number moved, not *why* in the business sense; answers
   are prompted to say so.
 - DuckDB warehouses only, like MetricForge.

@@ -1,8 +1,8 @@
 """Metric metadata from MetricForge definitions.
 
-MetricForge compiles single-table queries, so every metric is tied to one semantic model here.
-Metrics that cannot be answered correctly (cumulative ones, whose SQL is not time-aware yet, and
-any whose inputs span tables) are left out of the catalog rather than returned wrong.
+Every metric is tied to the semantic models it reads from. Metrics from different tables can
+be queried together; MetricForge aggregates each table on its own and joins on the dimensions
+every table declares, so those shared dimensions are the only ones such a query can use.
 """
 
 import difflib
@@ -27,11 +27,9 @@ class MetricCatalog:
 
     def __init__(self, registry: MetricRegistry) -> None:
         self.registry = registry
-        self._model_by_metric: dict[str, str] = {}
-        for metric in registry.metrics.values():
-            models = self._models_of(metric)
-            if metric.type != "cumulative" and len(models) == 1:
-                self._model_by_metric[metric.name] = models.pop()
+        self._models_by_metric: dict[str, list[str]] = {
+            metric.name: self._models_of(metric) for metric in registry.metrics.values()
+        }
 
     @classmethod
     def from_directory(cls, metrics_dir: Path) -> "MetricCatalog":
@@ -40,54 +38,78 @@ class MetricCatalog:
         registry.load_directory(metrics_dir)
         return cls(registry)
 
-    def _models_of(self, metric: Metric) -> set[str]:
+    def _models_of(self, metric: Metric) -> list[str]:
+        """Model names a metric reads from, in first-seen order."""
         params = metric.type_params
         if metric.type in ("simple", "cumulative"):
-            return {self.registry.get_model_for_measure(params.measure).name}
+            return [self.registry.get_model_for_measure(params.measure).name]
         if metric.type == "derived":
             referenced = params.metrics
         else:
             referenced = [params.numerator, params.denominator]
-        models: set[str] = set()
+        names: list[str] = []
         for name in referenced:
-            models |= self._models_of(self.registry.get_metric(name))
-        return models
+            for model_name in self._models_of(self.registry.get_metric(name)):
+                if model_name not in names:
+                    names.append(model_name)
+        return names
 
     @property
     def metric_names(self) -> list[str]:
-        return sorted(self._model_by_metric)
+        return sorted(self._models_by_metric)
 
     def metric(self, name: str) -> Metric:
-        """Look up a queryable metric or raise with suggestions."""
-        if name not in self._model_by_metric:
+        """Look up a metric or raise with suggestions."""
+        if name not in self._models_by_metric:
             raise HelpDeskError(f"Unknown metric '{name}'.{suggest(name, self.metric_names)}")
         return self.registry.get_metric(name)
 
-    def model_of(self, metric_name: str) -> SemanticModel:
-        self.metric(metric_name)
-        return self.registry.get_semantic_model(self._model_by_metric[metric_name])
+    def models_of(self, metric_names: list[str]) -> list[SemanticModel]:
+        """Every model the metrics read from, in first-seen order."""
+        names: list[str] = []
+        for metric_name in metric_names:
+            self.metric(metric_name)
+            names += [n for n in self._models_by_metric[metric_name] if n not in names]
+        return [self.registry.get_semantic_model(name) for name in names]
 
-    def time_dimension(self, model: SemanticModel) -> Dimension | None:
-        return next((d for d in model.dimensions if d.type == DimensionType.TIME), None)
+    def time_dimension(self, models: list[SemanticModel]) -> Dimension | None:
+        """The time axis for a query over these models, or None if one of them has no time.
 
-    def dimension(self, model: SemanticModel, name: str) -> Dimension:
-        """A categorical dimension of the model, or raise with the valid names."""
-        categorical = [d.name for d in model.dimensions if d.type == DimensionType.CATEGORICAL]
-        if name not in categorical:
-            raise HelpDeskError(
-                f"'{name}' is not a dimension of {model.name}.{suggest(name, categorical)}"
-            )
-        return model.get_dimension(name)
+        The first model's time dimension names the axis; MetricForge buckets the other models
+        by their own time dimension under that name.
+        """
+        firsts = [
+            next((d for d in model.dimensions if d.type == DimensionType.TIME), None)
+            for model in models
+        ]
+        if any(first is None for first in firsts):
+            return None
+        return firsts[0]
+
+    def shared_dimensions(self, models: list[SemanticModel]) -> list[str]:
+        """Categorical dimensions every model declares, in the first model's order."""
+        names = [d.name for d in models[0].dimensions if d.type == DimensionType.CATEGORICAL]
+        return [n for n in names if all(m.get_dimension(n) is not None for m in models)]
+
+    def dimension(self, models: list[SemanticModel], name: str) -> Dimension:
+        """A categorical dimension shared by the models, or raise with the valid names."""
+        shared = self.shared_dimensions(models)
+        if name not in shared:
+            where = " and ".join(model.name for model in models)
+            raise HelpDeskError(f"'{name}' is not a dimension of {where}.{suggest(name, shared)}")
+        dimension = models[0].get_dimension(name)
+        assert dimension is not None  # it is in shared, so the first model declares it
+        return dimension
 
     def info(self, name: str) -> MetricInfo:
         metric = self.metric(name)
-        model = self.model_of(name)
-        time_dimension = self.time_dimension(model)
+        models = self.models_of([name])
+        time_dimension = self.time_dimension(models)
         return MetricInfo(
             name=metric.name,
             type=metric.type,
             description=metric.description,
-            semantic_model=model.name,
-            dimensions=[d.name for d in model.dimensions if d.type == DimensionType.CATEGORICAL],
+            semantic_model=", ".join(model.name for model in models),
+            dimensions=self.shared_dimensions(models),
             time_dimension=time_dimension.name if time_dimension else None,
         )

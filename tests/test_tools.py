@@ -9,9 +9,24 @@ from metric_helpdesk.warehouse import WarehouseError, open_store
 
 
 class TestCatalog:
-    def test_cumulative_and_cross_table_metrics_are_hidden(self, helpdesk: HelpDesk) -> None:
-        names = {metric.name for metric in helpdesk.list_metrics().metrics}
-        assert names == {"revenue", "completed_orders", "average_order_value", "total_sessions"}
+    def test_every_metric_is_listed(self, helpdesk: HelpDesk) -> None:
+        by_name = {metric.name: metric for metric in helpdesk.list_metrics().metrics}
+        assert set(by_name) == {
+            "revenue",
+            "completed_orders",
+            "average_order_value",
+            "total_sessions",
+            "running_revenue",
+            "orders_per_session",
+        }
+        assert by_name["running_revenue"].time_dimension == "order_date"
+
+    def test_cross_table_metric_offers_only_shared_dimensions(self, helpdesk: HelpDesk) -> None:
+        """sessions declares no country, so the ratio cannot be split by it."""
+        info = {m.name: m for m in helpdesk.list_metrics().metrics}["orders_per_session"]
+        assert info.semantic_model == "orders, sessions"
+        assert info.dimensions == []
+        assert info.time_dimension == "order_date"
 
     def test_unknown_metric_suggests_the_closest_name(self, helpdesk: HelpDesk) -> None:
         with pytest.raises(HelpDeskError, match="Did you mean revenue"):
@@ -62,9 +77,24 @@ class TestQuery:
         assert result.row_count == 5
         assert result.truncated
 
-    def test_metrics_from_different_tables_are_refused(self, helpdesk: HelpDesk) -> None:
-        with pytest.raises(HelpDeskError, match="different tables"):
-            helpdesk.query_metrics(QueryRequest(metrics=["revenue", "total_sessions"]))
+    def test_metrics_from_different_tables_are_joined_by_month(self, helpdesk: HelpDesk) -> None:
+        """Sessions are bucketed by their own session_date under the orders' time axis."""
+        result = helpdesk.query_metrics(QueryRequest(metrics=["revenue", "total_sessions"]))
+        assert result.rows == [
+            {"order_date": "2024-01-01", "revenue": 930.0, "total_sessions": 1},
+            {"order_date": "2024-02-01", "revenue": 870.0, "total_sessions": None},
+        ]
+
+    def test_cross_table_query_cannot_group_by_an_unshared_dimension(
+        self, helpdesk: HelpDesk
+    ) -> None:
+        request = QueryRequest(metrics=["revenue", "total_sessions"], group_by=["country"])
+        with pytest.raises(HelpDeskError, match="not a dimension of orders and sessions"):
+            helpdesk.query_metrics(request)
+
+    def test_cumulative_metric_is_a_running_total(self, helpdesk: HelpDesk) -> None:
+        result = helpdesk.query_metrics(QueryRequest(metrics=["running_revenue"]))
+        assert [row["running_revenue"] for row in result.rows] == [930.0, 1800.0]
 
     def test_unknown_dimension_lists_valid_ones(self, helpdesk: HelpDesk) -> None:
         with pytest.raises(HelpDeskError, match="Valid: country, order_status"):
