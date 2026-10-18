@@ -113,8 +113,8 @@ answers included).
 
 ## Limits
 
-- Metrics from different tables join on dimensions that share a name. The demo's sessions call
-  their country `visitor_country`, so sessions and revenue compare by month but not by country.
+- Metrics from different tables join on dimensions that share a name, so a dimension declared by
+  one table only (the demo's `device`, `payment_method`) cannot group a cross-table query.
 - The data explains *where* and *when* a number moved, not *why* in the business sense; answers
   are prompted to say so.
 - DuckDB warehouses only, like MetricForge.

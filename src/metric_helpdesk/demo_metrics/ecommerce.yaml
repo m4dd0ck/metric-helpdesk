@@ -34,7 +34,7 @@ semantic_models:
       - {name: page_view_sum, agg: sum, expr: page_views}
     dimensions:
       - {name: session_date, type: time, time_granularity: day}
-      - {name: visitor_country, type: categorical, expr: country}
+      - {name: country, type: categorical}
       - {name: device, type: categorical}
 
 metrics:
