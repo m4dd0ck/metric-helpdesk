@@ -1,34 +1,30 @@
 .PHONY: build demo serve replay evals evals-api test lint clean
 
-build:
+build: ## Install dependencies
 	uv sync
 
-# seeded warehouse + metric definitions that .mcp.json and the CLI default to
-demo:
+demo: ## Seeded 2024 e-commerce warehouse plus the metric definitions the server defaults to
 	uv run metric-helpdesk demo
 
-serve:
+serve: ## Start the MCP server
 	uv run metric-helpdesk serve
 
-# offline: replays a saved session through the real tools, no API key
-replay:
+replay: ## Play a saved session through the real tools, offline
 	uv run metric-helpdesk ask --replay transcripts/july-dip.json
 
-# live, on your Claude subscription via headless Claude Code
-evals:
+evals: ## Graded questions through headless Claude Code
 	uv run metric-helpdesk eval --runner claude-code --out evals/results/claude-code.json
 
-# live, needs Claude API credentials
-evals-api:
+evals-api: ## Graded questions through the Claude API
 	uv run metric-helpdesk eval --runner api --out evals/results/api.json
 
-test:
+test: ## pytest
 	uv run pytest
 
-lint:
+lint: ## ruff and mypy
 	uv run ruff check .
 	uv run ruff format --check .
 	uv run mypy src/
 
-clean:
+clean: ## Remove the generated data
 	rm -rf data/

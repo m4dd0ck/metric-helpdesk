@@ -1,7 +1,6 @@
 # Tasks
 
-Single-repo status. Last reviewed **2026-10-20**. Cross-repo items are in
-`~/developer/hq/OPEN_ITEMS.md`; the MetricForge pin is in `~/developer/hq/repos.json`.
+Single-repo status, kept by hand. Last reviewed **2026-10-20**.
 
 The latest Claude Code eval run and its score are in `evals/results/claude-code.json`.
 
@@ -14,5 +13,5 @@ The latest Claude Code eval run and its score are in `evals/results/claude-code.
 ## Queue
 
 - [ ] The published transcript's last `query_metrics` call shows a filter as a Python repr
-      (`dimension='country' values=['DE']`) in the call log; format filters as text (hq
-      inventory, 2026-10-07).
+      (`dimension='country' values=['DE']`) in the call log; format filters as text
+      (2026-10-07).

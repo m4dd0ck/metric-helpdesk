@@ -80,15 +80,15 @@ edit the help strings in `src/metric_helpdesk/cli.py` or the Makefile, not this 
 | `metric-helpdesk demo` | Build the seeded demo warehouse and metric definitions. |
 | `metric-helpdesk ask` | Answer a question with the Claude API (needs API credentials), or replay a saved one. |
 | `metric-helpdesk eval` | Ask every eval question and grade the answers on facts. |
-| `make build` |  |
-| `make demo` |  |
-| `make serve` |  |
-| `make replay` |  |
-| `make evals` |  |
-| `make evals-api` |  |
-| `make test` |  |
-| `make lint` |  |
-| `make clean` |  |
+| `make build` | Install dependencies |
+| `make demo` | Seeded 2024 e-commerce warehouse plus the metric definitions the server defaults to |
+| `make serve` | Start the MCP server |
+| `make replay` | Play a saved session through the real tools, offline |
+| `make evals` | Graded questions through headless Claude Code |
+| `make evals-api` | Graded questions through the Claude API |
+| `make test` | pytest |
+| `make lint` | ruff and mypy |
+| `make clean` | Remove the generated data |
 <!-- generated:commands end -->
 
 `serve` takes `--metrics` and `--db` to point at another MetricForge project; `ask` takes
@@ -175,8 +175,8 @@ Makefile
 
 | Thing | Where | Notes |
 |---|---|---|
-| MetricForge | [m4dd0ck/metricforge](https://github.com/m4dd0ck/metricforge), installed from a git tag in `pyproject.toml` | the semantic layer; the tag is bumped together with revenue-monitor's (`~/developer/hq/CONVENTIONS.md`) |
-| Claude Code / Claude Desktop | the owner's subscription | launch the server through `.mcp.json` or the Desktop config |
+| MetricForge | [m4dd0ck/metricforge](https://github.com/m4dd0ck/metricforge), installed from a git tag in `pyproject.toml` | the semantic layer; bump its tag together with revenue-monitor's pin |
+| Claude Code / Claude Desktop | any Claude Code or Claude Desktop install | launch the server through `.mcp.json` or the Desktop config |
 | Claude API | `ANTHROPIC_API_KEY` in the environment | only for `ask` and `make evals-api`; nothing in the repo |
 
 ## Development
@@ -201,4 +201,3 @@ Licensed MIT (`LICENSE`).
 - `RUNBOOK.md`: run, record an eval, bump MetricForge, release, restore.
 - `CLAUDE.md`: the agent rules.
 - `TASK.md`: what is open, and the latest eval score.
-- `~/developer/hq/CONVENTIONS.md`: the portfolio release and commit rules.

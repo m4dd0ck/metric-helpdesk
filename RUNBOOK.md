@@ -27,7 +27,7 @@ path. `make serve` runs the server by hand on stdio for debugging.
 ## Record an eval run
 
 1. `make demo` so the warehouse matches the questions.
-2. `make evals` (headless Claude Code on the owner's subscription; several minutes). The
+2. `make evals` (headless Claude Code; several minutes). The
    graded answers land in `evals/results/claude-code.json`.
 3. Read the failures before committing the file; a wrong fact in `evals/questions.yaml` is as
    likely as a wrong answer. Commit the results file and note the score in `TASK.md`.
@@ -39,12 +39,9 @@ path. `make serve` runs the server by hand on stdio for debugging.
 1. Change the tag in the `metricforge` dependency line of `pyproject.toml`, then `uv lock`.
 2. `uv run pytest` and `make replay`; the replay exercises the real tools against the new
    compiler.
-3. Commit, and bump revenue-monitor's pin in the same sitting
-   (`~/developer/hq/CONVENTIONS.md` §Versioning).
+3. Commit, and bump revenue-monitor's pin in the same sitting.
 
 ## Release
-
-Follows `~/developer/hq/CONVENTIONS.md` §Versioning.
 
 1. Bump `version` in `pyproject.toml` and `__version__` in `src/metric_helpdesk/__init__.py`,
    then `uv lock` (CI installs with `--locked`).
@@ -68,5 +65,4 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy src/
 uv run pytest
 make demo
 make replay
-python3 ~/.claude/scripts/doc-check.py --repo .
 ```
