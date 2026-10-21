@@ -3,7 +3,7 @@
 Single-repo status. Last reviewed **2026-10-20**. Cross-repo items are in
 `~/developer/hq/OPEN_ITEMS.md`; the MetricForge pin is in `~/developer/hq/repos.json`.
 
-Latest recorded Claude Code eval run: 7/7, in `evals/results/claude-code.json`.
+The latest Claude Code eval run and its score are in `evals/results/claude-code.json`.
 
 ## Needs the owner
 
